@@ -4,33 +4,26 @@ jobs:
   fix-d8:
     runs-on: ubuntu-latest
     steps:
-      - name: Multi-Mirror D8 Fetch & Verify
+      - name: API-Driven D8 Fetch & Verify
         run: |
           set -ex
           mkdir -p out/x64.release
           
-          # Espejos de respaldo para d8 x64
-          URLS=(
-            "https://github.com/Pexien/prebuilt-v8/releases/latest/download/d8-linux64.zip"
-            "https://github.com/v8-binaries/v8-binaries/releases/latest/download/d8-linux64.zip"
-          )
+          # Consultar la API para obtener la URL de descarga directa del asset de Linux x64
+          API_URL="https://api.github.com/repos/v8-binaries/v8-binaries/releases/latest"
+          DOWNLOAD_URL=$(curl -sSL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$API_URL" | grep "browser_download_url" | grep -i "linux" | head -n 1 | cut -d '"' -f 4)
           
-          SUCCESS=0
-          for url in "${URLS[@]}"; do
-            echo "[*] Probando espejo: $url"
-            curl -sL "$url" -o out/x64.release/d8.zip || continue
-            
-            if head -c 2 out/x64.release/d8.zip | grep -q "PK"; then
-              echo "[+] ¡Binario comprimido válido (PK) obtenido con éxito!"
-              SUCCESS=1
-              break
-            else
-              echo "[-] Espejo devolvió basura HTML (404/Redirect), rotando..."
-            fi
-          done
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "[*] Falló v8-binaries, probando espejo alternativo Pexien..."
+            API_URL="https://api.github.com/repos/Pexien/prebuilt-v8/releases/latest"
+            DOWNLOAD_URL=$(curl -sSL "$API_URL" | grep "browser_download_url" | grep -i "linux" | head -n 1 | cut -d '"' -f 4)
+          fi
           
-          if [ $SUCCESS -eq 0 ]; then
-            echo "[!] FATAL: Ningún espejo soltó un zip válido. Dump del último fallo:"
+          echo "[+] URL resuelta por API: $DOWNLOAD_URL"
+          curl -sL "$DOWNLOAD_URL" -o out/x64.release/d8.zip
+          
+          if ! head -c 2 out/x64.release/d8.zip | grep -q "PK"; then
+            echo "[!] FATAL: El archivo descargado no es un ZIP válido. Contenido recibido:"
             cat out/x64.release/d8.zip
             exit 1
           fi
