@@ -1,0 +1,19 @@
+name: D8 Fetch Fix
+on: [workflow_dispatch, push]
+jobs:
+  fix-d8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch D8 Fetcher
+        run: |
+          set -ex
+          mkdir -p out/x64.release
+          DOWNLOAD_URL=$(gh api repos/v8-binaries/v8-binaries/releases --jq '.[0].assets[]? | select(.name | ascii_downcase | contains("linux")) | .browser_download_url' 2>/dev/null || true)
+          [ -z "$DOWNLOAD_URL" ] && DOWNLOAD_URL=$(curl -sSL "https://api.github.com/repos/Pexien/prebuilt-v8/releases/latest" | jq -r '.assets[]? | select(.name | ascii_downcase | contains("linux")) | .browser_download_url')
+          curl -sL "$DOWNLOAD_URL" -o out/x64.release/d8.zip
+          unzip -qo out/x64.release/d8.zip -d out/x64.release/
+          chmod +x out/x64.release/d8
+          ./out/x64.release/d8 --version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
